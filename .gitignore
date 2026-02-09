@@ -1,0 +1,7 @@
+venv/
+__pycache__/
+*.pyc
+hasil.json
+hasil.txt
+url.txt
+.claude/
