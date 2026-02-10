@@ -1,0 +1,227 @@
+{% extends "base.html" %}
+
+{% block title %}Scan Results - Judol Hunter{% endblock %}
+
+{% block content %}
+<div class="terminal-window" style="max-width: 1000px;">
+    <div class="terminal-header">
+        <div class="terminal-buttons">
+            <button class="terminal-btn close"></button>
+            <button class="terminal-btn minimize"></button>
+            <button class="terminal-btn maximize"></button>
+        </div>
+        <div class="terminal-title">judolhunter@terminal:~$ ./view_results.sh</div>
+    </div>
+
+    <div class="terminal-body" x-data="scanDetail">
+        <h1 class="mb-3">&gt; SCAN RESULTS</h1>
+
+        <template x-if="loading">
+            <div class="text-center">
+                <p class="terminal-loading">LOADING SCAN DATA</p>
+            </div>
+        </template>
+
+        <template x-if="scan">
+            <div>
+                <!-- URL and Status Header -->
+                <div class="scan-result">
+                    <div class="scan-result-header">
+                        <div class="scan-result-url" style="flex: 1;" x-text="scan.url"></div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <span class="badge" :class="getStatusBadgeClass(scan.status)" x-text="scan.status"></span>
+                            <span class="badge" :class="getRiskBadgeClass(scan.risk_level)" x-text="scan.risk_level"></span>
+                        </div>
+                    </div>
+
+                    <!-- Metadata -->
+                    <div class="flex flex-between mt-2" style="font-size: 0.85rem;">
+                        <span class="text-dim">
+                            Started: <span x-text="formatTimestamp(scan.started_at)"></span>
+                        </span>
+                        <span class="text-dim" x-show="scan.completed_at">
+                            Duration: <span x-text="formatDuration(scan.duration_seconds)"></span>
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Error Display -->
+                <template x-if="scan.status === 'failed' && scan.error_message">
+                    <div class="flash-message flash-error">
+                        <strong>✗ SCAN FAILED</strong>
+                        <div x-text="scan.error_message"></div>
+                    </div>
+                </template>
+
+                <!-- Findings Section -->
+                <template x-if="scan.status === 'completed' && scan.findings">
+                    <div class="mt-3">
+                        <h2>&gt; FINDINGS</h2>
+
+                        <!-- Cloaking -->
+                        <div class="scan-result">
+                            <h3 class="mb-1">./cloaking_detection</h3>
+                            <template x-if="scan.findings.cloaking?.is_cloaking">
+                                <div class="finding-item danger">
+                                    <strong class="text-error">⚠ CLOAKING DETECTED</strong>
+                                    <p class="text-dim">Similarity: <span x-text="(scan.findings.cloaking.similarity * 100).toFixed(1) + '%'"></span></p>
+                                    <template x-for="detail in scan.findings.cloaking.details">
+                                        <div class="text-dim mt-1" x-text="'  - ' + detail"></div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template x-if="!scan.findings.cloaking?.is_cloaking">
+                                <div class="finding-item" style="border-left-color: var(--terminal-fg);">
+                                    <strong class="text-accent">✓ NO CLOAKING DETECTED</strong>
+                                    <p class="text-dim">Similarity: <span x-text="(scan.findings.cloaking.similarity * 100).toFixed(1) + '%'"></span></p>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Gambling Keywords -->
+                        <div class="scan-result">
+                            <h3 class="mb-1">./keyword_scan</h3>
+                            <template x-if="scan.findings.gambling_keywords && scan.findings.gambling_keywords.length > 0">
+                                <div class="finding-item danger">
+                                    <strong class="text-error">
+                                        ⚠ <span x-text="scan.findings.gambling_keywords.length"></span> KEYWORDS FOUND
+                                    </strong>
+                                    <table class="terminal-table mt-2">
+                                        <thead>
+                                            <tr>
+                                                <th>Keyword</th>
+                                                <th>Count</th>
+                                                <th>Context</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="kw in scan.findings.gambling_keywords.slice(0, 20)">
+                                                <tr>
+                                                    <td x-text="kw.keyword"></td>
+                                                    <td x-text="kw.count"></td>
+                                                    <td class="text-dim" style="font-size: 0.85rem;" x-text="kw.context"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </template>
+                            <template x-if="!scan.findings.gambling_keywords || scan.findings.gambling_keywords.length === 0">
+                                <div class="finding-item" style="border-left-color: var(--terminal-fg);">
+                                    <strong class="text-accent">✓ NO GAMBLING KEYWORDS</strong>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Suspicious Links -->
+                        <div class="scan-result">
+                            <h3 class="mb-1">./link_analysis</h3>
+                            <template x-if="scan.findings.suspicious_links && scan.findings.suspicious_links.length > 0">
+                                <div class="finding-item warning">
+                                    <strong class="text-warning">
+                                        ⚠ <span x-text="scan.findings.suspicious_links.length"></span> SUSPICIOUS LINKS
+                                    </strong>
+                                    <table class="terminal-table mt-2">
+                                        <thead>
+                                            <tr>
+                                                <th>Domain</th>
+                                                <th>Reason</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <template x-for="link in scan.findings.suspicious_links.slice(0, 10)">
+                                                <tr>
+                                                    <td x-text="link.domain"></td>
+                                                    <td class="text-dim" x-text="link.reason"></td>
+                                                </tr>
+                                            </template>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </template>
+                            <template x-if="!scan.findings.suspicious_links || scan.findings.suspicious_links.length === 0">
+                                <div class="finding-item" style="border-left-color: var(--terminal-fg);">
+                                    <strong class="text-accent">✓ NO SUSPICIOUS LINKS</strong>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Hidden Elements -->
+                        <div class="scan-result">
+                            <h3 class="mb-1">./hidden_elements</h3>
+                            <template x-if="scan.findings.hidden_elements && scan.findings.hidden_elements.length > 0">
+                                <div class="finding-item warning">
+                                    <strong class="text-warning">
+                                        ⚠ <span x-text="scan.findings.hidden_elements.length"></span> HIDDEN SPAM ELEMENTS
+                                    </strong>
+                                    <template x-for="el in scan.findings.hidden_elements.slice(0, 5)">
+                                        <div class="mt-2 text-dim" style="font-size: 0.85rem;">
+                                            <strong x-text="'&lt;' + el.tag + '&gt;'"></strong>
+                                            <div x-text="el.style"></div>
+                                            <div x-text="'... ' + el.text_preview"></div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template x-if="!scan.findings.hidden_elements || scan.findings.hidden_elements.length === 0">
+                                <div class="finding-item" style="border-left-color: var(--terminal-fg);">
+                                    <strong class="text-accent">✓ NO HIDDEN SPAM ELEMENTS</strong>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Meta Injection -->
+                        <div class="scan-result">
+                            <h3 class="mb-1">./meta_injection</h3>
+                            <template x-if="scan.findings.meta_injection && scan.findings.meta_injection.length > 0">
+                                <div class="finding-item warning">
+                                    <strong class="text-warning">
+                                        ⚠ <span x-text="scan.findings.meta_injection.length"></span> COMPROMISED META TAGS
+                                    </strong>
+                                    <template x-for="meta in scan.findings.meta_injection">
+                                        <div class="mt-2 text-dim" style="font-size: 0.85rem;">
+                                            <strong x-text="'&lt;' + meta.meta + '&gt;'"></strong>
+                                            <div x-text="meta.content"></div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                            <template x-if="!scan.findings.meta_injection || scan.findings.meta_injection.length === 0">
+                                <div class="finding-item" style="border-left-color: var(--terminal-fg);">
+                                    <strong class="text-accent">✓ NO META INJECTION</strong>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+
+                <!-- Actions -->
+                <div class="mt-3 flex" style="gap: 1rem;">
+                    <a href="/scan" class="terminal-btn-secondary" style="text-decoration: none;">
+                        &lt; NEW SCAN
+                    </a>
+                    <a href="/history" class="terminal-btn-secondary" style="text-decoration: none;">
+                        &gt; VIEW HISTORY
+                    </a>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+
+<script>
+function getStatusBadgeClass(status) {
+    const classes = {
+        'pending': 'badge',
+        'running': 'badge badge-clean',
+        'completed': 'badge badge-clean',
+        'failed': 'badge badge-error'
+    };
+    return classes[status] || 'badge';
+}
+
+function getRiskBadgeClass(risk) {
+    return 'badge badge-risk-' + risk;
+}
+</script>
+{% endblock %}

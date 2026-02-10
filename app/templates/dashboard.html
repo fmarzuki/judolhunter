@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Judol Hunter{% endblock %}
+
+{% block content %}
+<div class="terminal-window">
+    <div class="terminal-header">
+        <div class="terminal-buttons">
+            <button class="terminal-btn close"></button>
+            <button class="terminal-btn minimize"></button>
+            <button class="terminal-btn maximize"></button>
+        </div>
+        <div class="terminal-title">judolhunter@terminal:~$ ./dashboard.sh</div>
+    </div>
+
+    <div class="terminal-body" x-data="{ user: null }" x-init="user = JSON.parse(localStorage.getItem('user') || 'null')">
+        <h1 class="mb-3">&gt; DASHBOARD</h1>
+
+        <template x-if="user">
+            <div>
+                <!-- User Info -->
+                <div class="scan-result mb-3">
+                    <div class="flex flex-between">
+                        <div>
+                            <h2 class="text-accent">./user_profile</h2>
+                            <div class="mt-2">
+                                <span class="text-dim">Email:</span>
+                                <span x-text="user.email"></span>
+                            </div>
+                            <div class="mt-1">
+                                <span class="text-dim">Plan:</span>
+                                <span class="badge" :class="'badge-risk-' + (user.plan_type === 'free' ? 'low' : 'medium')" x-text="user.plan_type.toUpperCase()"></span>
+                            </div>
+                            <div class="mt-1" x-show="user.plan_expires_at">
+                                <span class="text-dim">Expires:</span>
+                                <span x-text="new Date(user.plan_expires_at).toLocaleDateString()"></span>
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="text-dim" style="font-size: 0.85rem;">Member since</div>
+                            <div x-text="new Date(user.created_at).toLocaleDateString()"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Stats -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                    <div class="scan-result" style="text-align: center;">
+                        <div class="text-dim" style="font-size: 0.85rem;">./total_scans</div>
+                        <div style="font-size: 2rem; font-weight: 600;" class="text-accent">--</div>
+                    </div>
+                    <div class="scan-result" style="text-align: center;">
+                        <div class="text-dim" style="font-size: 0.85rem;">./threats_found</div>
+                        <div style="font-size: 2rem; font-weight: 600;" class="text-error">--</div>
+                    </div>
+                    <div class="scan-result" style="text-align: center;">
+                        <div class="text-dim" style="font-size: 0.85rem;">./domains_this_week</div>
+                        <div style="font-size: 2rem; font-weight: 600;" class="text-info">--</div>
+                    </div>
+                </div>
+
+                <!-- Plan Upgrade -->
+                <div class="scan-result mb-3">
+                    <h2 class="mb-2">./subscription</h2>
+                    <div class="flex flex-between">
+                        <div>
+                            <p class="text-dim mb-1">Current plan: <strong x-text="user.plan_type.toUpperCase()"></strong></p>
+                            <p class="text-dim" style="font-size: 0.85rem;">
+                                <template x-if="user.plan_type === 'free'">
+                                    <span>20 URLs/scan, 3 domains/week</span>
+                                </template>
+                                <template x-if="user.plan_type === 'lite'">
+                                    <span>100 URLs/scan, 15 domains/week</span>
+                                </template>
+                                <template x-if="user.plan_type === 'pro'">
+                                    <span>500 URLs/scan, unlimited domains</span>
+                                </template>
+                                <template x-if="user.plan_type === 'corporate'">
+                                    <span>1000 URLs/scan, unlimited domains</span>
+                                </template>
+                            </p>
+                        </div>
+                        <a href="/pricing" class="terminal-btn-secondary" style="text-decoration: none;">
+                            UPGRADE
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Quick Actions -->
+                <div class="mb-3">
+                    <h2>./quick_actions</h2>
+                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                        <a href="/scan" class="terminal-btn-primary" style="text-decoration: none;">
+                            &gt; NEW SCAN
+                        </a>
+                        <a href="/history" class="terminal-btn-secondary" style="text-decoration: none;">
+                            &gt; VIEW HISTORY
+                        </a>
+                        <a href="/pricing" class="terminal-btn-secondary" style="text-decoration: none;">
+                            &gt; VIEW PLANS
+                        </a>
+                    </div>
+                </div>
+
+                <!-- Recent Scans Preview -->
+                <div>
+                    <h2>./recent_activity</h2>
+                    <div class="scan-result" style="text-align: center; padding: 2rem;">
+                        <p class="text-dim">Loading recent scans...</p>
+                        <p class="text-dim" style="font-size: 0.85rem; margin-top: 0.5rem;">
+                            <a href="/history">View all scan history &rarr;</a>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <template x-if="!user">
+            <div class="scan-result" style="text-align: center; padding: 3rem;">
+                <h2 class="text-warning">./authentication_required</h2>
+                <p class="text-dim mb-3">Please login to view your dashboard.</p>
+                <div style="display: flex; gap: 1rem; justify-content: center;">
+                    <a href="/login" class="terminal-btn-primary" style="text-decoration: none;">
+                        &gt; LOGIN_
+                    </a>
+                    <a href="/register" class="terminal-btn-secondary" style="text-decoration: none;">
+                        &gt; REGISTER_
+                    </a>
+                </div>
+            </div>
+        </template>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+
+{% block title %}New Scan - Judol Hunter{% endblock %}
+
+{% block content %}
+<div class="terminal-window" style="max-width: 800px;">
+    <div class="terminal-header">
+        <div class="terminal-buttons">
+            <button class="terminal-btn close"></button>
+            <button class="terminal-btn minimize"></button>
+            <button class="terminal-btn maximize"></button>
+        </div>
+        <div class="terminal-title">judolhunter@terminal:~$ ./new_scan.sh</div>
+    </div>
+
+    <div class="terminal-body" x-data="scanForm">
+        <h1 class="mb-3">&gt; NEW SCAN</h1>
+
+        <!-- Quota Info -->
+        <div class="scan-result mb-3">
+            <div class="flex flex-between">
+                <span class="text-dim">./quota_status</span>
+                <span x-show="!isAuthenticated" class="badge badge-risk-medium">ANONYMOUS</span>
+                <span x-show="isAuthenticated" class="badge badge-risk-low" x-text="user?.plan_type?.toUpperCase()"></span>
+            </div>
+            <div class="text-dim" style="font-size: 0.85rem; margin-top: 0.5rem;">
+                <span x-show="!isAuthenticated">• 5 URLs per scan • 2 domains per week</span>
+                <span x-show="isAuthenticated">• Logged in • Extended quotas</span>
+            </div>
+        </div>
+
+        <!-- Scan Form -->
+        <form class="terminal-form" @submit.prevent="submitScan">
+            <div class="form-group">
+                <label class="form-label" for="urls">./target_urls</label>
+                <textarea
+                    id="urls"
+                    class="terminal-textarea"
+                    x-model="urls"
+                    placeholder="Enter URLs (one per line):&#10;https://example.com&#10;https://another-site.com&#10;..."
+                    rows="8"
+                    required
+                ></textarea>
+                <div class="flex flex-between mt-1">
+                    <span class="text-dim" style="font-size: 0.85rem;">
+                        One URL per line. Max 1000 URLs per batch.
+                    </span>
+                </div>
+            </div>
+
+            <button
+                type="submit"
+                class="terminal-btn-primary"
+                :disabled="isSubmitting"
+                x-text="isSubmitting ? 'SCANNING...' : '> START SCAN_'"
+            ></button>
+        </form>
+
+        <!-- Scan Results -->
+        <template x-if="showResults && scans.length > 0">
+            <div class="mt-3">
+                <h2>&gt; SCAN RESULTS</h2>
+
+                <template x-for="scan in scans" :key="scan.id">
+                    <div class="scan-result">
+                        <div class="scan-result-header">
+                            <div class="scan-result-url" x-text="scan.url"></div>
+                            <div>
+                                <span class="badge" :class="getStatusBadgeClass(scan.status)" x-text="scan.status"></span>
+                                <span class="badge mt-1" :class="getRiskBadgeClass(scan.risk_level)" x-text="scan.risk_level"></span>
+                            </div>
+                        </div>
+
+                        <!-- Progress for running scans -->
+                        <template x-if="scan.status === 'running' || scan.status === 'pending'">
+                            <div class="terminal-progress">
+                                <div class="terminal-progress-bar" style="width: 0%">
+                                    <span class="terminal-loading">SCANNING</span>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Completed scan results -->
+                        <template x-if="scan.status === 'completed'">
+                            <div class="scan-findings">
+                                <template x-if="scan.findings">
+                                    <template x-if="scan.findings.cloaking?.is_cloaking">
+                                        <div class="finding-item danger">
+                                            <strong class="text-error">⚠ CLOAKING DETECTED</strong>
+                                            <template x-for="detail in scan.findings.cloaking.details">
+                                                <div class="text-dim" x-text="'  - ' + detail"></div>
+                                            </template>
+                                        </div>
+                                    </template>
+
+                                    <template x-if="scan.findings.gambling_keywords?.length > 0">
+                                        <div class="finding-item danger">
+                                            <strong class="text-error">
+                                                ⚠ <span x-text="scan.findings.gambling_keywords.length"></span> GAMBLING KEYWORDS
+                                            </strong>
+                                            <template x-for="kw in scan.findings.gambling_keywords.slice(0, 5)">
+                                                <div class="text-dim" x-text="'  - "' + kw.keyword + '" (' + kw.count + 'x)'"></div>
+                                            </template>
+                                        </div>
+                                    </template>
+
+                                    <template x-if="scan.findings.suspicious_links?.length > 0">
+                                        <div class="finding-item warning">
+                                            <strong class="text-warning">
+                                                ⚠ <span x-text="scan.findings.suspicious_links.length"></span> SUSPICIOUS LINKS
+                                            </strong>
+                                            <template x-for="link in scan.findings.suspicious_links.slice(0, 3)">
+                                                <div class="text-dim" x-text="'  - ' + link.domain + ' (' + link.reason + ')'"></div>
+                                            </template>
+                                        </div>
+                                    </template>
+                                </template>
+
+                                <div class="mt-2">
+                                    <a :href="'/scans/' + scan.id" class="terminal-btn-secondary" style="text-decoration: none;">
+                                        &gt; VIEW DETAILS_
+                                    </a>
+                                </div>
+                            </div>
+                        </template>
+
+                        <!-- Failed scan -->
+                        <template x-if="scan.status === 'failed'">
+                            <div class="finding-item danger">
+                                <strong class="text-error">✗ SCAN FAILED</strong>
+                                <div class="text-dim" x-text="scan.error_message || 'Unknown error'"></div>
+                            </div>
+                        </template>
+                    </div>
+                </template>
+            </div>
+        </template>
+
+        <!-- Login Prompt -->
+        <div x-show="!isAuthenticated" class="scan-result mt-3" style="text-align: center;">
+            <p class="text-dim mb-2">
+                Want higher quotas? <a href="/login">Login</a> or <a href="/register">Register</a> for free.
+            </p>
+            <a href="/register" class="terminal-btn-secondary" style="text-decoration: none;">
+                &gt; CREATE FREE ACCOUNT_
+            </a>
+        </div>
+    </div>
+</div>
+
+<script>
+function getStatusBadgeClass(status) {
+    const classes = {
+        'pending': 'badge',
+        'running': 'badge badge-clean',
+        'completed': 'badge badge-clean',
+        'failed': 'badge badge-error'
+    };
+    return classes[status] || 'badge';
+}
+
+function getRiskBadgeClass(risk) {
+    return 'badge badge-risk-' + risk;
+}
+</script>
+{% endblock %}

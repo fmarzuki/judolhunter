@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Login - Judol Hunter{% endblock %}
+
+{% block content %}
+<div class="terminal-window" style="max-width: 500px;">
+    <div class="terminal-header">
+        <div class="terminal-buttons">
+            <button class="terminal-btn close"></button>
+            <button class="terminal-btn minimize"></button>
+            <button class="terminal-btn maximize"></button>
+        </div>
+        <div class="terminal-title">judolhunter@terminal:~$ ./login.sh</div>
+    </div>
+
+    <div class="terminal-body" x-data="authForm">
+        <h1 class="mb-3">&gt; LOGIN</h1>
+
+        <div x-show="error" class="flash-message flash-error mb-2" x-text="error"></div>
+
+        <form class="terminal-form" @submit.prevent="submit">
+            <div class="form-group">
+                <label class="form-label" for="email">./email</label>
+                <input
+                    type="email"
+                    id="email"
+                    class="terminal-input"
+                    x-model="email"
+                    placeholder="your@email.com"
+                    required
+                    autocomplete="email"
+                >
+            </div>
+
+            <div class="form-group">
+                <label class="form-label" for="password">./password</label>
+                <input
+                    type="password"
+                    id="password"
+                    class="terminal-input"
+                    x-model="password"
+                    placeholder="••••••••"
+                    required
+                    autocomplete="current-password"
+                >
+            </div>
+
+            <button
+                type="submit"
+                class="terminal-btn-primary"
+                :disabled="isSubmitting"
+                style="width: 100%;"
+                x-text="isSubmitting ? 'AUTHENTICATING...' : '> LOGIN_'"
+            ></button>
+        </form>
+
+        <div class="mt-3 text-center">
+            <p class="text-dim">
+                Don't have an account? <a href="/register">Register</a>
+            </p>
+            <p class="text-dim" style="font-size: 0.85rem;">
+                <a href="/">&lt; Back to home</a>
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}

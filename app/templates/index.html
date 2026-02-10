@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+
+{% block content %}
+<!-- ASCII Logo -->
+<div class="ascii-logo">
+<pre style="margin: 0;">
+    ███╗   ██╗████████╗███████╗██████╗ ███╗   ███╗██╗ ██████╗███████╗
+    ████╗  ██║╚══██╔══╝██╔════╝██╔══██╗████╗ ████║██║██╔════╝██╔════╝
+    ██╔██╗ ██║   ██║   █████╗  ██████╔╝██╔████╔██║██║██║     █████╗
+    ██║╚██╗██║   ██║   ██╔══╝  ██╔══██╗██║╚██╔╝██║██║██║     ██╔══╝
+    ██║ ╚████║   ██║   ███████╗██║  ██║██║ ╚═╝ ██║██║╚██████╗███████╗
+    ╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝ ╚═════╝╚══════╝
+                         ███╗   ██╗███████╗██████╗
+                         ████╗  ██║██╔════╝██╔══██╗
+                         ██╔██╗ ██║█████╗  ██████╔╝
+                         ██║╚██╗██║██╔══╝  ██╔══██╗
+                         ██║ ╚████║███████╗██║  ██║
+                         ╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
+</pre>
+</div>
+
+<!-- Hero Section -->
+<div style="text-align: center; padding: 2rem 0;">
+    <h1>JUDOL HUNTER</h1>
+    <p class="text-dim" style="font-size: 1.1rem; max-width: 600px; margin: 1rem auto;">
+        Deteksi URL tersusupi link judi online dengan simulasi Googlebot.
+        Identifikasi cloaking attacks dan konten spam tersembunyi.
+    </p>
+
+    <div class="mt-3">
+        <a href="/scan" class="terminal-btn-primary" style="text-decoration: none;">
+            &gt; MULAI SCAN_
+        </a>
+    </div>
+</div>
+
+<!-- Features Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem; margin: 3rem 0;">
+    <div class="scan-result">
+        <h3 class="text-info">./dual_fetch</h3>
+        <p class="text-dim">
+            Simulasi Googlebot vs browser biasa untuk deteksi cloaking.
+            Bandingkan response untuk menemukan konten tersembunyi.
+        </p>
+    </div>
+
+    <div class="scan-result">
+        <h3 class="text-warning">./keyword_scan</h3>
+        <p class="text-dim">
+            Deteksi 87+ keyword judi online: slot gacor, togel, poker,
+            casino online, dan lainnya dalam konten halaman.
+        </p>
+    </div>
+
+    <div class="scan-result">
+        <h3 class="text-error">./link_analysis</h3>
+        <p class="text-dim">
+            Identifikasi link ke domain judi yang dikenal dan pola URL
+            mencurigakan dalam struktur website.
+        </p>
+    </div>
+
+    <div class="scan-result">
+        <h3 class="text-accent">./hidden_detection</h3>
+        <p class="text-dim">
+            Temukan elemen tersembunyi (display:none, visibility:hidden)
+            yang berisi konten spam judi online.
+        </p>
+    </div>
+</div>
+
+<!-- Risk Levels -->
+<div style="margin: 2rem 0; padding: 1.5rem; border: 1px solid var(--terminal-dim); border-radius: 4px;">
+    <h2>./risk_levels</h2>
+    <table class="terminal-table">
+        <thead>
+            <tr>
+                <th>Level</th>
+                <th>Kriteria</th>
+                <th>Aksi</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><span class="badge badge-risk-low">LOW</span></td>
+                <td>Tidak ada findings mencurigakan</td>
+                <td>Monitor</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-risk-medium">MEDIUM</span></td>
+                <td>Keywords, links, atau hidden elements ditemukan</td>
+                <td>Investigasi</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-risk-high">HIGH</span></td>
+                <td>Cloaking atau 3+ keywords ditemukan</td>
+                <td>Perbaiki segera</td>
+            </tr>
+            <tr>
+                <td><span class="badge badge-risk-critical">CRITICAL</span></td>
+                <td>Cloaking + keywords (terinfeksi)</td>
+                <td>URGENT - Clean segera</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<!-- Pricing Preview -->
+<div style="margin: 3rem 0;">
+    <h2 style="text-align: center;">./pricing</h2>
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-top: 1.5rem;">
+        <div class="scan-result" style="text-align: center;">
+            <h3 class="text-dim">ANONYMOUS</h3>
+            <div style="font-size: 2rem; margin: 1rem 0;">FREE</div>
+            <ul style="list-style: none; padding: 0; text-align: left;">
+                <li class="mb-1">• 5 URLs per scan</li>
+                <li class="mb-1">• 2 domains per week</li>
+                <li>• No login required</li>
+            </ul>
+        </div>
+
+        <div class="scan-result" style="text-align: center;">
+            <h3 class="text-info">FREE</h3>
+            <div style="font-size: 2rem; margin: 1rem 0;">FREE</div>
+            <ul style="list-style: none; padding: 0; text-align: left;">
+                <li class="mb-1">• 20 URLs per scan</li>
+                <li class="mb-1">• 3 domains per week</li>
+                <li>• Save scan history</li>
+            </ul>
+        </div>
+
+        <div class="scan-result" style="text-align: center;">
+            <h3 class="text-warning">LITE</h3>
+            <div style="font-size: 2rem; margin: 1rem 0;">Rp 50K<span style="font-size: 0.85rem;">/bln</span></div>
+            <ul style="list-style: none; padding: 0; text-align: left;">
+                <li class="mb-1">• 100 URLs per scan</li>
+                <li class="mb-1">• 15 domains per week</li>
+                <li>• Priority support</li>
+            </ul>
+        </div>
+
+        <div class="scan-result" style="text-align: center; border-color: var(--terminal-fg);">
+            <h3 class="text-accent">PRO</h3>
+            <div style="font-size: 2rem; margin: 1rem 0;">Rp 150K<span style="font-size: 0.85rem;">/bln</span></div>
+            <ul style="list-style: none; padding: 0; text-align: left;">
+                <li class="mb-1">• 500 URLs per scan</li>
+                <li class="mb-1">• Unlimited domains</li>
+                <li>• API access</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<!-- CTA Section -->
+<div style="text-align: center; padding: 3rem 0; border-top: 1px solid var(--terminal-dim); margin-top: 2rem;">
+    <h2 class="text-accent">./ready_to_scan?</h2>
+    <p class="text-dim mb-3">
+        Mulai scan website Anda sekarang. Deteksi dini, cegah kerugian SEO.
+    </p>
+    <a href="/scan" class="terminal-btn-primary" style="text-decoration: none;">
+        &gt; SCAN SEKARANG_
+    </a>
+</div>
+{% endblock %}

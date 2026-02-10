@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+
+{% block title %}Scan History - Judol Hunter{% endblock %}
+
+{% block content %}
+<div class="terminal-window" style="max-width: 1200px;">
+    <div class="terminal-header">
+        <div class="terminal-buttons">
+            <button class="terminal-btn close"></button>
+            <button class="terminal-btn minimize"></button>
+            <button class="terminal-btn maximize"></button>
+        </div>
+        <div class="terminal-title">judolhunter@terminal:~$ ./scan_history.sh</div>
+    </div>
+
+    <div class="terminal-body" x-data="scanHistory">
+        <div class="flex flex-between mb-3">
+            <h1>&gt; SCAN HISTORY</h1>
+            <a href="/scan" class="terminal-btn-primary" style="text-decoration: none;">
+                + NEW SCAN
+            </a>
+        </div>
+
+        <template x-if="loading">
+            <div class="text-center" style="padding: 2rem;">
+                <p class="terminal-loading">LOADING HISTORY</p>
+            </div>
+        </template>
+
+        <template x-if="!loading && scans.length === 0">
+            <div class="scan-result" style="text-align: center; padding: 3rem;">
+                <h3 class="text-dim">./no_scans_found</h3>
+                <p class="text-dim mb-3">You haven't run any scans yet.</p>
+                <a href="/scan" class="terminal-btn-primary" style="text-decoration: none;">
+                    &gt; START YOUR FIRST SCAN_
+                </a>
+            </div>
+        </template>
+
+        <template x-if="!loading && scans.length > 0">
+            <div class="scan-result">
+                <table class="terminal-table">
+                    <thead>
+                        <tr>
+                            <th>URL</th>
+                            <th>Status</th>
+                            <th>Risk</th>
+                            <th>Started</th>
+                            <th>Duration</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="scan in scans" :key="scan.id">
+                            <tr>
+                                <td>
+                                    <a :href="'/scans/' + scan.id" class="text-dim" style="max-width: 300px; display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" x-text="scan.url"></a>
+                                </td>
+                                <td>
+                                    <span class="badge" :class="getStatusBadgeClass(scan.status)" x-text="scan.status"></span>
+                                </td>
+                                <td>
+                                    <span class="badge" :class="getRiskBadgeClass(scan.risk_level)" x-text="scan.risk_level"></span>
+                                </td>
+                                <td class="text-dim" style="font-size: 0.85rem;" x-text="formatTimestamp(scan.started_at)"></td>
+                                <td class="text-dim" style="font-size: 0.85rem;" x-text="formatDuration(scan.duration_seconds)"></td>
+                                <td>
+                                    <a :href="'/scans/' + scan.id" class="terminal-btn-secondary" style="font-size: 0.75rem; padding: 0.25rem 0.75rem; text-decoration: none;">
+                                        VIEW
+                                    </a>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Pagination (simplified) -->
+            <div class="flex flex-center mt-3">
+                <span class="text-dim" style="font-size: 0.85rem;">
+                    Showing latest <span x-text="scans.length"></span> scans
+                </span>
+            </div>
+        </template>
+    </div>
+</div>
+
+<script>
+function getStatusBadgeClass(status) {
+    const classes = {
+        'pending': 'badge',
+        'running': 'badge badge-clean',
+        'completed': 'badge badge-clean',
+        'failed': 'badge badge-error'
+    };
+    return classes[status] || 'badge';
+}
+
+function getRiskBadgeClass(risk) {
+    return 'badge badge-risk-' + risk;
+}
+
+function formatTimestamp(ts) {
+    if (!ts) return '-';
+    return new Date(ts).toLocaleString();
+}
+
+function formatDuration(seconds) {
+    if (!seconds) return '-';
+    if (seconds < 60) return seconds.toFixed(1) + 's';
+    return (seconds / 60).toFixed(1) + 'm';
+}
+</script>
+{% endblock %}

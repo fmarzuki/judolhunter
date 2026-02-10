@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="terminal">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Judol Hunter - Detect Gambling Content Injection{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/terminal.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+</head>
+<body>
+    <div class="terminal-window" x-data="app">
+        <!-- Terminal Header -->
+        <div class="terminal-header">
+            <div class="terminal-buttons">
+                <button class="terminal-btn close"></button>
+                <button class="terminal-btn minimize"></button>
+                <button class="terminal-btn maximize"></button>
+            </div>
+            <div class="terminal-title">judolhunter@terminal:~$ ./scan.sh</div>
+        </div>
+
+        <!-- Navigation -->
+        <nav class="navbar">
+            <div class="nav-brand">
+                <a href="/">./JUDOL_HUNTER</a>
+            </div>
+            <div class="nav-links">
+                <a href="/" class="nav-link">./home</a>
+                <a href="/scan" class="nav-link">./scan</a>
+                <template x-if="isAuthenticated">
+                    <a href="/history" class="nav-link">./history</a>
+                </template>
+                <template x-if="isAuthenticated">
+                    <a href="/dashboard" class="nav-link">./dashboard</a>
+                </template>
+                <template x-if="!isAuthenticated">
+                    <a href="/login" class="nav-link">./login</a>
+                </template>
+                <template x-if="isAuthenticated">
+                    <a href="#" @click.prevent="logout()" class="nav-link">./logout</a>
+                </template>
+            </div>
+        </nav>
+
+        <!-- Main Content -->
+        <main class="terminal-body">
+            {% block content %}{% endblock %}
+        </main>
+
+        <!-- Terminal Footer -->
+        <footer class="terminal-footer" style="padding: 1rem; border-top: 1px solid var(--terminal-dim); margin-top: 2rem;">
+            <div class="flex flex-between" style="font-size: 0.85rem; color: var(--terminal-dim);">
+                <div>
+                    <span x-data="clock">
+                        <span x-text="date"></span> <span x-text="time"></span>
+                    </span>
+                </div>
+                <div>
+                    v2.0.0 | <a href="https://github.com/judolhunter" target="_blank">./github</a>
+                </div>
+            </div>
+            <div class="mt-2" style="font-size: 0.75rem; color: var(--terminal-dim);">
+                <span class="terminal-cursor"></span> ready
+            </div>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    {% block scripts %}{% endblock %}
+</body>
+</html>
