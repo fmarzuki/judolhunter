@@ -6,6 +6,7 @@ dan konten judi online tersembunyi.
 """
 
 import argparse
+import base64
 import json
 import re
 import sys
@@ -120,46 +121,248 @@ def detect_gambling_keywords(html: str) -> list[dict]:
     return findings
 
 
-def detect_suspicious_links(html: str) -> list[dict]:
-    """Cari link eksternal ke domain judi yang dikenal.
+def _extract_urls_from_js(script_content: str) -> list[str]:
+    """Ekstrak URL http(s) dari konten inline <script>.
 
-    Returns list of dicts: {url, domain, reason}.
+    Menangkap pola umum injeksi: window.location, document.write, variable assignment.
+    """
+    url_pattern = re.compile(r'https?://[^\s"\'<>\)\]\}\\]+')
+    urls = url_pattern.findall(script_content)
+    # Bersihkan trailing punctuation
+    cleaned = []
+    for u in urls:
+        u = u.rstrip(".,;:!?")
+        if len(u) > 10:
+            cleaned.append(u)
+    return cleaned
+
+
+def _decode_obfuscated_urls(script_content: str) -> list[str]:
+    """Decode URL dari pola obfuscation base64 (atob) di inline script."""
+    urls = []
+    # Cari pola atob("...") atau atob('...')
+    atob_pattern = re.compile(r"""atob\s*\(\s*["']([A-Za-z0-9+/=]+)["']\s*\)""")
+    for match in atob_pattern.finditer(script_content):
+        encoded = match.group(1)
+        try:
+            decoded = base64.b64decode(encoded).decode("utf-8", errors="ignore")
+            # Ekstrak URL dari hasil decode
+            found = re.findall(r'https?://[^\s"\'<>\)\]\}\\]+', decoded)
+            urls.extend(found)
+        except Exception:
+            pass
+
+    # Cari juga string base64 panjang yang di-assign ke variable
+    b64_var_pattern = re.compile(r"""=\s*["']([A-Za-z0-9+/=]{20,})["']""")
+    for match in b64_var_pattern.finditer(script_content):
+        encoded = match.group(1)
+        try:
+            decoded = base64.b64decode(encoded).decode("utf-8", errors="ignore")
+            found = re.findall(r'https?://[^\s"\'<>\)\]\}\\]+', decoded)
+            urls.extend(found)
+        except Exception:
+            pass
+
+    return urls
+
+
+def detect_suspicious_links(html: str, base_url: str = "") -> list[dict]:
+    """Cari link eksternal ke domain judi dari berbagai sumber HTML.
+
+    Scan: <a>, <iframe>, <embed>, <object>, <script src>, <form action>,
+    <meta http-equiv="refresh">, data-href/data-url/data-src, inline JS URLs,
+    dan base64 obfuscation.
+
+    Returns list of dicts: {url, domain, reason, source}.
     """
     soup = BeautifulSoup(html, "html.parser")
     findings = []
-    seen = set()
+    seen_urls = set()
+    base_domain = urlparse(base_url).netloc.lower() if base_url else ""
 
-    for tag in soup.find_all("a", href=True):
-        href = tag["href"]
-        if not href.startswith(("http://", "https://")):
-            continue
+    # Gambling keyword fragments untuk matching di URL/domain
+    _gambling_url_keywords = re.compile(
+        r"slot|togel|judi|casino|poker|gacor|maxwin|toto|mahjong|scatter|bonus.*member|rtp.*slot|freebet",
+        re.IGNORECASE,
+    )
 
-        parsed = urlparse(href)
+    def _check_url(url: str, source: str) -> bool:
+        """Cek satu URL apakah mencurigakan dan tambahkan ke findings.
+
+        Returns True jika URL di-flag sebagai suspicious.
+        """
+        if not url or not url.startswith(("http://", "https://")):
+            return False
+
+        parsed = urlparse(url)
         domain = parsed.netloc.lower()
-        if domain in seen:
-            continue
-        seen.add(domain)
+        if not domain:
+            return False
+
+        # Filter link internal (same-domain)
+        if base_domain and domain == base_domain:
+            return False
+
+        # Deduplicate by full URL
+        if url in seen_urls:
+            return False
+        seen_urls.add(url)
 
         # Cek domain cocok dengan known gambling domains
         for gambling_domain in PATTERNS["known_gambling_domains"]:
             if gambling_domain in domain:
                 findings.append({
-                    "url": href,
+                    "url": url,
                     "domain": domain,
                     "reason": f"Domain mengandung '{gambling_domain}'",
+                    "source": source,
                 })
-                break
-        else:
-            # Cek URL path patterns
-            full = (domain + parsed.path).lower()
-            for pattern in PATTERNS["suspicious_url_patterns"]:
-                if pattern in full:
+                return True
+
+        # Cek URL path patterns
+        full = (domain + parsed.path).lower()
+        for pattern in PATTERNS["suspicious_url_patterns"]:
+            if pattern in full:
+                findings.append({
+                    "url": url,
+                    "domain": domain,
+                    "reason": f"URL mengandung pattern '{pattern}'",
+                    "source": source,
+                })
+                return True
+
+        # Cek gambling keywords di domain+path (catch-all untuk domain baru)
+        if _gambling_url_keywords.search(full):
+            matched = _gambling_url_keywords.search(full).group(0)
+            findings.append({
+                "url": url,
+                "domain": domain,
+                "reason": f"URL mengandung keyword '{matched}'",
+                "source": source,
+            })
+            return True
+
+        return False
+
+    # === Fase 1: Deteksi unconditional (selalu flag jika external) ===
+
+    # 1. <link rel="amphtml"/"canonical"> pointing to external domains
+    #    External amphtml/canonical = sangat mencurigakan (sering dipakai redirector judol)
+    for tag in soup.find_all("link", href=True):
+        rel = " ".join(tag.get("rel", []))
+        if rel in ("amphtml", "canonical"):
+            href = tag["href"]
+            parsed = urlparse(href)
+            link_domain = parsed.netloc.lower()
+            if base_domain and link_domain and link_domain != base_domain:
+                if href not in seen_urls:
+                    seen_urls.add(href)
                     findings.append({
                         "url": href,
-                        "domain": domain,
-                        "reason": f"URL mengandung pattern '{pattern}'",
+                        "domain": link_domain,
+                        "reason": f"External <link rel={rel}> (kemungkinan redirector judol)",
+                        "source": f"<link rel={rel}>",
                     })
-                    break
+
+    # === Fase 2: Deteksi pattern-based (flag jika cocok gambling patterns) ===
+
+    # 2. <a href>, <area href>
+    for tag in soup.find_all(["a", "area"], href=True):
+        _check_url(tag["href"], f"<{tag.name} href>")
+
+    # 3. <iframe src>, <embed src>, <object data>
+    for tag in soup.find_all("iframe", src=True):
+        _check_url(tag["src"], "<iframe src>")
+    for tag in soup.find_all("embed", src=True):
+        _check_url(tag["src"], "<embed src>")
+    for tag in soup.find_all("object", data=True):
+        _check_url(tag["data"], "<object data>")
+
+    # 4. <script src>
+    for tag in soup.find_all("script", src=True):
+        _check_url(tag["src"], "<script src>")
+
+    # 5. <form action>
+    for tag in soup.find_all("form", action=True):
+        _check_url(tag["action"], "<form action>")
+
+    # 6. <meta http-equiv="refresh" content="...;url=...">
+    for meta in soup.find_all("meta", attrs={"http-equiv": re.compile(r"refresh", re.I)}):
+        content = meta.get("content", "")
+        match = re.search(r"url\s*=\s*['\"]?\s*(https?://[^\s'\"]+)", content, re.I)
+        if match:
+            _check_url(match.group(1), "<meta refresh>")
+
+    # 7. data-href, data-url, data-src pada semua elemen
+    for attr_name in ("data-href", "data-url", "data-src"):
+        for tag in soup.find_all(attrs={attr_name: True}):
+            _check_url(tag[attr_name], f"<{tag.name} {attr_name}>")
+
+    # 8. Inline <script> — extract URLs dan decode obfuscation
+    for tag in soup.find_all("script", src=False):
+        script_text = tag.string or ""
+        if not script_text.strip():
+            continue
+        # Skip JSON-LD (handled separately below)
+        if tag.get("type") == "application/ld+json":
+            continue
+        # URL langsung di JS
+        for url in _extract_urls_from_js(script_text):
+            _check_url(url, "<script> inline JS")
+        # Base64 / atob obfuscation
+        for url in _decode_obfuscated_urls(script_text):
+            _check_url(url, "<script> obfuscated (base64)")
+
+    # 9. JSON-LD (<script type="application/ld+json">) — extract all URLs
+    _safe_ld_domains = {"schema.org", "w3.org", "www.w3.org"}
+    for tag in soup.find_all("script", type="application/ld+json"):
+        ld_text = tag.string or ""
+        if not ld_text.strip():
+            continue
+        for url in re.findall(r'https?://[^\s"\'<>\\]+', ld_text):
+            url = url.rstrip(".,;:!?")
+            ld_domain = urlparse(url).netloc.lower()
+            if ld_domain in _safe_ld_domains:
+                continue
+            _check_url(url, "<script> JSON-LD")
+
+    # 10. <img src> dari domain external
+    for tag in soup.find_all("img", src=True):
+        src = tag["src"]
+        if src.startswith(("http://", "https://")):
+            _check_url(src, "<img src>")
+
+    # 11. Anchor text berisi domain judol (internal links yang teks-nya menyebut domain gambling)
+    #     Pola umum injeksi: <a href="internal">SULTAN188z.space -5k-</a>
+    #     Domain di anchor text pada link internal yang sudah terinfeksi = pasti judol
+    _domain_like = re.compile(
+        r'\b([a-zA-Z0-9][\w-]*\d+[\w-]*\.(?:com|net|org|online|site|space|fun|art|link|cc|id|info|cloud|dev))\b',
+        re.IGNORECASE,
+    )
+    seen_anchor_domains = set()
+    for tag in soup.find_all("a", href=True):
+        href = tag["href"]
+        parsed_href = urlparse(href)
+        href_domain = parsed_href.netloc.lower()
+        # Hanya proses link internal yang anchor text-nya mencurigakan
+        if base_domain and href_domain == base_domain:
+            anchor_text = tag.get_text(strip=True)
+            if not anchor_text:
+                continue
+            for m in _domain_like.finditer(anchor_text):
+                domain_in_text = m.group(1).lower()
+                if domain_in_text == base_domain or domain_in_text in seen_anchor_domains:
+                    continue
+                seen_anchor_domains.add(domain_in_text)
+                fake_url = f"https://{domain_in_text}"
+                if fake_url not in seen_urls:
+                    seen_urls.add(fake_url)
+                    findings.append({
+                        "url": fake_url,
+                        "domain": domain_in_text,
+                        "reason": f"Domain judol disebut di anchor text: '{anchor_text[:60]}'",
+                        "source": "<a> anchor text",
+                    })
 
     return findings
 
@@ -461,7 +664,7 @@ def scan_url(url: str, verbose: bool = False) -> dict:
         issues.append("gambling_keywords")
 
     # 3. Suspicious links
-    links = detect_suspicious_links(html)
+    links = detect_suspicious_links(html, base_url=url)
     scan["findings"]["suspicious_links"] = links
     if links:
         issues.append("suspicious_links")
@@ -551,9 +754,28 @@ def _print_result(scan: dict) -> None:
     # Links
     links = findings.get("suspicious_links", [])
     if links:
-        console.print(f"  [red]⚠ {len(links)} link mencurigakan:[/red]")
-        for link in links[:5]:
-            console.print(f"    - {link['domain']} ({link['reason']})")
+        # Pisahkan: link dengan URL asli vs domain dari anchor text
+        real_links = [l for l in links if l.get("source") != "<a> anchor text"]
+        anchor_domains = [l for l in links if l.get("source") == "<a> anchor text"]
+
+        console.print(f"  [red]⚠ {len(links)} link/domain judol ditemukan:[/red]")
+
+        if real_links:
+            console.print(f"    [bold]URL eksternal mencurigakan ({len(real_links)}):[/bold]")
+            for link in real_links[:10]:
+                source = link.get("source", "")
+                source_info = f" [dim]via {source}[/dim]" if source else ""
+                console.print(f"      - [bold]{link['url']}[/bold]{source_info}")
+                console.print(f"        {link['reason']}")
+            if len(real_links) > 10:
+                console.print(f"      [dim]... dan {len(real_links) - 10} lainnya[/dim]")
+
+        if anchor_domains:
+            console.print(f"    [bold]Domain judol dari anchor text ({len(anchor_domains)}):[/bold]")
+            for link in anchor_domains[:15]:
+                console.print(f"      - [bold]{link['domain']}[/bold]")
+            if len(anchor_domains) > 15:
+                console.print(f"      [dim]... dan {len(anchor_domains) - 15} lainnya[/dim]")
 
     # Hidden elements
     hidden = findings.get("hidden_elements", [])
