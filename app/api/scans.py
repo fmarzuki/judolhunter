@@ -2,6 +2,7 @@
 import asyncio
 import json
 from collections.abc import AsyncGenerator
+from collections import defaultdict
 from datetime import datetime
 from typing import Annotated
 
@@ -20,11 +21,16 @@ from app.services.scanner import ProgressCallback, scan_url
 
 router = APIRouter(prefix="/api/scans", tags=["Scans"])
 
+# In-memory storage for real-time progress messages
+# Format: {scan_id: [{"message": str, "timestamp": str, "data": dict}]}
+_scan_progress = defaultdict(list)
+
 
 async def execute_scan(scan_id: int, url: str) -> None:
     """Background task to execute a scan."""
     from app.config import get_settings
     from app.utils.db import async_session_maker
+    import traceback
 
     settings = get_settings()
 
@@ -37,16 +43,30 @@ async def execute_scan(scan_id: int, url: str) -> None:
             scan = result.scalar_one_or_none()
 
             if not scan:
+                print(f"Scan {scan_id} not found")
                 return
 
             # Update status to running
             scan.status = ScanStatus.RUNNING
             await session.commit()
 
-            # Create progress callback for SSE
+            # Create progress callback that stores messages in memory
             progress = ProgressCallback()
+            
+            async def store_progress(message: str, data: dict | None = None):
+                """Store progress messages in memory for SSE streaming."""
+                progress_item = {
+                    "message": message,
+                    "timestamp": datetime.utcnow().isoformat(),
+                    "data": data
+                }
+                _scan_progress[scan_id].append(progress_item)
+                print(f"[Scan {scan_id}] Progress: {message}")  # Debug log
+            
+            progress.add_callback(store_progress)
 
             # Run scan
+            print(f"Starting scan for {url}...")
             result_data = await scan_url(url, progress)
 
             # Update scan with results
@@ -57,9 +77,12 @@ async def execute_scan(scan_id: int, url: str) -> None:
             scan.completed_at = datetime.utcnow()
 
             await session.commit()
+            print(f"Scan {scan_id} completed: {scan.risk_level}")
 
         except Exception as e:
             # Mark scan as failed
+            print(f"Scan {scan_id} failed: {e}")
+            traceback.print_exc()
             result = await session.execute(
                 select(Scan).where(Scan.id == scan_id),
             )
@@ -68,7 +91,7 @@ async def execute_scan(scan_id: int, url: str) -> None:
                 scan.status = ScanStatus.FAILED
                 scan.error_message = str(e)
                 scan.completed_at = datetime.utcnow()
-            await session.commit()
+                await session.commit()
 
 
 @router.post("", response_model=list[ScanResponse], status_code=202)
@@ -76,11 +99,12 @@ async def create_scan(
     data: ScanCreate,
     background_tasks: BackgroundTasks,
     session: DbSession,
-    user: CurrentUser,
+    user: CurrentUser = None,
 ):
     """Create new scan jobs for multiple URLs.
 
     Returns list of created scan IDs. Scans run in background.
+    Works for both authenticated and anonymous users.
     """
     # Get or create session ID for anonymous users
     sess_id = None
@@ -174,39 +198,100 @@ async def get_scan(
 async def stream_scan_progress(
     scan_id: int,
     session: DbSession,
-    user: CurrentUser,
+    user: CurrentUser = None,
+    token: str = Query(None),
 ):
-    """Server-Sent Events stream for real-time scan progress."""
+    """Server-Sent Events stream for real-time scan progress.
+    
+    Authentication can be via:
+    - Authorization header (preferred)
+    - token query parameter (for EventSource compatibility)
+    """
+    # If no user from header, try to get from token query param
+    if not user and token:
+        from app.core.security import decode_token
+        try:
+            payload = decode_token(token)
+            user_id = payload.get("sub")
+            if user_id:
+                user_id = int(user_id)
+                result = await session.execute(
+                    select(User).where(User.id == user_id, User.is_active == True)
+                )
+                user = result.scalar_one_or_none()
+                if user:
+                    print(f"[SSE] Token authentication successful for user: {user.email}")
+        except Exception as e:
+            print(f"[SSE] Token verification failed: {e}")
+            pass  # Continue as anonymous if token invalid
 
     async def event_stream() -> AsyncGenerator[str, None]:
         """Generate SSE events."""
+        print(f"[SSE] Starting stream for scan {scan_id}, user: {user.email if user else 'anonymous'}")
+        
         # Verify scan exists and user has access
         result = await session.execute(
             select(Scan).where(Scan.id == scan_id),
         )
         scan = result.scalar_one_or_none()
 
-        if not scan or scan.user_id != (user.id if user else None):
+        if not scan:
+            print(f"[SSE] Scan {scan_id} not found")
             yield "data: " + json.dumps({
                 "type": "error",
-                "message": "Scan not found or access denied",
+                "message": "Scan not found",
+            }) + "\n\n"
+            return
+        
+        if scan.user_id != (user.id if user else None):
+            print(f"[SSE] Access denied for scan {scan_id}")
+            yield "data: " + json.dumps({
+                "type": "error",
+                "message": "Access denied",
             }) + "\n\n"
             return
 
+        print(f"[SSE] Scan {scan_id} found, starting stream...")
+        
         # Poll for updates
         last_status = None
-        max_iterations = 300  # 5 minutes max
+        last_message_count = 0
+        max_iterations = 600  # 5 minutes max (600 * 0.5s)
 
-        for _ in range(max_iterations):
+        for iteration in range(max_iterations):
             # Refresh scan from database
             await session.refresh(scan)
 
+            # Send progress messages from in-memory storage
+            if scan_id in _scan_progress:
+                messages = _scan_progress[scan_id]
+                if len(messages) > last_message_count:
+                    print(f"[SSE] Sending {len(messages) - last_message_count} new progress messages")
+                    # Send new messages
+                    for msg in messages[last_message_count:]:
+                        event = ScanStreamEvent(
+                            type="progress",
+                            scan_id=scan.id,
+                            url=scan.url,
+                            message=msg['message'],
+                            data={
+                                "status": scan.status,
+                                "risk_level": scan.risk_level,
+                                "step_data": msg.get('data')
+                            },
+                            timestamp=datetime.fromisoformat(msg['timestamp']),
+                        )
+                        yield event.sse_format()
+                    last_message_count = len(messages)
+
+            # Send status change events
             if scan.status != last_status:
+                print(f"[SSE] Status changed to: {scan.status}")
                 event = ScanStreamEvent(
-                    type="progress",
+                    type="status",
                     scan_id=scan.id,
                     url=scan.url,
-                    message=f"Scan {scan.status}",
+                    message=f"Status berubah: {scan.status}",
                     data={
                         "status": scan.status,
                         "risk_level": scan.risk_level,
@@ -218,11 +303,12 @@ async def stream_scan_progress(
 
             # Stop if completed or failed
             if scan.status in (ScanStatus.COMPLETED, ScanStatus.FAILED):
+                print(f"[SSE] Scan {scan_id} finished with status: {scan.status}")
                 final_event = ScanStreamEvent(
                     type="complete" if scan.status == ScanStatus.COMPLETED else "error",
                     scan_id=scan.id,
                     url=scan.url,
-                    message="Scan completed" if scan.status == ScanStatus.COMPLETED else f"Scan failed: {scan.error_message}",
+                    message="✓ Scan selesai" if scan.status == ScanStatus.COMPLETED else f"✗ Scan gagal: {scan.error_message}",
                     data={
                         "status": scan.status,
                         "risk_level": scan.risk_level,
@@ -231,9 +317,14 @@ async def stream_scan_progress(
                     timestamp=datetime.utcnow(),
                 )
                 yield final_event.sse_format()
+                
+                # Clean up progress messages from memory
+                if scan_id in _scan_progress:
+                    del _scan_progress[scan_id]
+                
                 break
 
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)  # Poll every 500ms for better responsiveness
 
     return StreamingResponse(
         event_stream(),

@@ -98,8 +98,15 @@ class QuotaService:
     @staticmethod
     async def get_user_quota_limits(user: User) -> dict[str, Any]:
         """Get quota limits for authenticated user."""
-        from app.models.user import Plan
+        from app.models.user import Plan, UserRole
         from sqlalchemy import select
+
+        # Bypass quota for admin (unlimited)
+        if user.role == UserRole.ADMIN:
+            return {
+                "max_urls_per_scan": None,  # Unlimited
+                "max_domains_per_week": None,  # Unlimited
+            }
 
         # This would typically query the Plan table
         # For now, return defaults based on plan type
@@ -107,7 +114,7 @@ class QuotaService:
             "free": {"max_urls_per_scan": 20, "max_domains_per_week": 3},
             "lite": {"max_urls_per_scan": 100, "max_domains_per_week": 15},
             "pro": {"max_urls_per_scan": 500, "max_domains_per_week": None},
-            "corporate": {"max_urls_per_scan": 1000, "max_domains_per_week": None},
+            "corporate": {"max_urls_per_scan": None, "max_domains_per_week": None},  # Unlimited
         }
 
         return defaults.get(user.plan_type.value, defaults["free"])

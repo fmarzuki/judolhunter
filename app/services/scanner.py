@@ -299,18 +299,26 @@ async def scan_url(
     Returns dict with full scan result.
     """
     if progress_callback:
-        await progress_callback.notify(f"Starting scan: {url}")
+        await progress_callback.notify(f"🔍 Memulai scan untuk URL...")
 
     # Dual fetch
     if progress_callback:
-        await progress_callback.notify("Fetching as Googlebot...")
+        await progress_callback.notify("🤖 Mengambil halaman sebagai Googlebot...")
 
     bot_result = await fetch_as_useragent(url, GOOGLEBOT_UA)
 
     if progress_callback:
-        await progress_callback.notify("Fetching as Browser...")
+        status_bot = "✓" if bot_result["status_code"] == 200 else "✗"
+        await progress_callback.notify(f"{status_bot} Googlebot: HTTP {bot_result['status_code']}")
+
+    if progress_callback:
+        await progress_callback.notify("🌐 Mengambil halaman sebagai Browser...")
 
     user_result = await fetch_as_useragent(url, BROWSER_UA)
+
+    if progress_callback:
+        status_user = "✓" if user_result["status_code"] == 200 else "✗"
+        await progress_callback.notify(f"{status_user} Browser: HTTP {user_result['status_code']}")
 
     scan = {
         "url": url,
@@ -336,57 +344,69 @@ async def scan_url(
     if bot_result["error"] and user_result["error"]:
         scan["status"] = "error"
         scan["risk_level"] = "unknown"
+        if progress_callback:
+            await progress_callback.notify("✗ Gagal mengambil halaman")
         return scan
 
     issues = []
 
     # 1. Cloaking detection
     if progress_callback:
-        await progress_callback.notify("Analyzing for cloaking...")
+        await progress_callback.notify("🔬 Menganalisis cloaking...")
 
     cloaking = compare_responses(bot_result, user_result)
     scan["findings"]["cloaking"] = cloaking
     if cloaking["is_cloaking"]:
         issues.append("cloaking")
+        if progress_callback:
+            await progress_callback.notify(f"⚠ Cloaking terdeteksi! Similarity: {cloaking['similarity']:.1%}")
 
     # Use Googlebot response for analysis (cloaking target)
     html = bot_result["html"] or user_result["html"] or ""
 
     # 2. Keyword detection
     if progress_callback:
-        await progress_callback.notify("Scanning for gambling keywords...")
+        await progress_callback.notify("🎰 Memindai kata kunci judi...")
 
     keywords = detect_gambling_keywords(html)
     scan["findings"]["gambling_keywords"] = keywords
     if keywords:
         issues.append("gambling_keywords")
+        if progress_callback:
+            await progress_callback.notify(f"⚠ Ditemukan {len(keywords)} kata kunci judi")
 
     # 3. Suspicious links
     if progress_callback:
-        await progress_callback.notify("Checking suspicious links...")
+        await progress_callback.notify("🔗 Memeriksa link mencurigakan...")
 
     links = detect_suspicious_links(html)
     scan["findings"]["suspicious_links"] = links
     if links:
         issues.append("suspicious_links")
+        if progress_callback:
+            await progress_callback.notify(f"⚠ Ditemukan {len(links)} link mencurigakan")
 
     # 4. Hidden elements
     if progress_callback:
-        await progress_callback.notify("Detecting hidden spam elements...")
+        await progress_callback.notify("👁 Mendeteksi elemen tersembunyi...")
 
     hidden = detect_hidden_elements(html)
     scan["findings"]["hidden_elements"] = hidden
     if hidden:
         issues.append("hidden_elements")
+        if progress_callback:
+            await progress_callback.notify(f"⚠ Ditemukan {len(hidden)} elemen spam tersembunyi")
 
     # 5. Meta injection
     if progress_callback:
-        await progress_callback.notify("Analyzing meta tags...")
+        await progress_callback.notify("📋 Menganalisis meta tags...")
 
     meta = detect_meta_injection(html)
     scan["findings"]["meta_injection"] = meta
     if meta:
         issues.append("meta_injection")
+        if progress_callback:
+            await progress_callback.notify(f"⚠ Ditemukan {len(meta)} meta tag terinfeksi")
 
     # Determine risk level
     if cloaking["is_cloaking"] and keywords:
@@ -405,7 +425,21 @@ async def scan_url(
     scan["issues"] = issues
 
     if progress_callback:
-        risk_msg = f"Scan complete: {scan['risk_level'].upper()} risk"
+        risk_labels = {
+            "critical": "KRITIS",
+            "high": "TINGGI",
+            "medium": "SEDANG",
+            "low": "RENDAH",
+            "unknown": "TIDAK DIKETAHUI"
+        }
+        status_icons = {
+            "infected": "🔴",
+            "suspicious": "🟡",
+            "clean": "🟢",
+            "error": "⚫"
+        }
+        icon = status_icons.get(scan["status"], "")
+        risk_msg = f"{icon} Scan selesai - Risiko: {risk_labels[scan['risk_level']]}"
         await progress_callback.notify(risk_msg, {"result": scan})
 
     return scan

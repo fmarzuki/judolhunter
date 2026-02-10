@@ -92,18 +92,27 @@ async def check_quota(
         (allowed, error_message)
     """
     from urllib.parse import urlparse
+    from app.models.user import UserRole
+
+    # Bypass quota for admin
+    if user and user.role == UserRole.ADMIN:
+        return True, None
 
     plan = await get_user_plan(session, user)
 
-    # Check 1: URL count limit
+    # Check 1: URL count limit (0 or None means unlimited)
     url_count = len(urls)
-    if url_count > plan.max_urls_per_scan:
+    if plan.max_urls_per_scan and url_count > plan.max_urls_per_scan:
         return (
             False,
             f"URL limit exceeded: {url_count} URLs (max: {plan.max_urls_per_scan})",
         )
 
-    # Check 2: Domain weekly limit
+    # Check 2: Domain weekly limit (None means unlimited)
+    if plan.max_domains_per_week is None:
+        # Unlimited domains
+        return True, None
+
     # Extract unique domains from URLs
     domains = set()
     for url in urls:

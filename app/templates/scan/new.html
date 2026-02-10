@@ -17,11 +17,11 @@
         <h1 class="mb-3">&gt; NEW SCAN</h1>
 
         <!-- Quota Info -->
-        <div class="scan-result mb-3">
+        <div class="scan-result mb-3" x-data="app">
             <div class="flex flex-between">
                 <span class="text-dim">./quota_status</span>
                 <span x-show="!isAuthenticated" class="badge badge-risk-medium">ANONYMOUS</span>
-                <span x-show="isAuthenticated" class="badge badge-risk-low" x-text="user?.plan_type?.toUpperCase()"></span>
+                <span x-show="isAuthenticated" class="badge badge-risk-low" x-text="user?.plan_type?.toUpperCase() || 'FREE'"></span>
             </div>
             <div class="text-dim" style="font-size: 0.85rem; margin-top: 0.5rem;">
                 <span x-show="!isAuthenticated">• 5 URLs per scan • 2 domains per week</span>
@@ -62,7 +62,7 @@
                 <h2>&gt; SCAN RESULTS</h2>
 
                 <template x-for="scan in scans" :key="scan.id">
-                    <div class="scan-result">
+                    <div class="scan-result" :class="scan.isScanning ? 'scanning' : ''">
                         <div class="scan-result-header">
                             <div class="scan-result-url" x-text="scan.url"></div>
                             <div>
@@ -71,22 +71,38 @@
                             </div>
                         </div>
 
-                        <!-- Progress for running scans -->
-                        <template x-if="scan.status === 'running' || scan.status === 'pending'">
-                            <div class="terminal-progress">
-                                <div class="terminal-progress-bar" style="width: 0%">
-                                    <span class="terminal-loading">SCANNING</span>
+                        <!-- Progress messages for running scans -->
+                        <template x-if="scan.isScanning && scan.currentStep">
+                            <div class="scan-progress-container">
+                                <div class="scan-progress-step">
+                                    <span class="terminal-loading" x-text="scan.currentStep"></span>
                                 </div>
+                                
+                                <!-- Progress log -->
+                                <template x-if="scan.progress && scan.progress.length > 0">
+                                    <div class="scan-progress-log">
+                                        <template x-for="(msg, idx) in scan.progress.slice(-5)" :key="idx">
+                                            <div class="scan-progress-log-item" x-text="'› ' + msg.message"></div>
+                                        </template>
+                                    </div>
+                                </template>
                             </div>
                         </template>
 
                         <!-- Completed scan results -->
                         <template x-if="scan.status === 'completed'">
                             <div class="scan-findings">
+                                <!-- Quick summary -->
+                                <div class="scan-summary mb-2">
+                                    <template x-if="scan.currentStep">
+                                        <div class="text-accent" x-text="scan.currentStep"></div>
+                                    </template>
+                                </div>
+
                                 <template x-if="scan.findings">
                                     <template x-if="scan.findings.cloaking?.is_cloaking">
                                         <div class="finding-item danger">
-                                            <strong class="text-error">⚠ CLOAKING DETECTED</strong>
+                                            <strong class="text-error">⚠ CLOAKING TERDETEKSI</strong>
                                             <template x-for="detail in scan.findings.cloaking.details">
                                                 <div class="text-dim" x-text="'  - ' + detail"></div>
                                             </template>
@@ -96,7 +112,7 @@
                                     <template x-if="scan.findings.gambling_keywords?.length > 0">
                                         <div class="finding-item danger">
                                             <strong class="text-error">
-                                                ⚠ <span x-text="scan.findings.gambling_keywords.length"></span> GAMBLING KEYWORDS
+                                                ⚠ <span x-text="scan.findings.gambling_keywords.length"></span> KATA KUNCI JUDI
                                             </strong>
                                             <template x-for="kw in scan.findings.gambling_keywords.slice(0, 5)">
                                                 <div class="text-dim" x-text="'  - "' + kw.keyword + '" (' + kw.count + 'x)'"></div>
@@ -107,7 +123,7 @@
                                     <template x-if="scan.findings.suspicious_links?.length > 0">
                                         <div class="finding-item warning">
                                             <strong class="text-warning">
-                                                ⚠ <span x-text="scan.findings.suspicious_links.length"></span> SUSPICIOUS LINKS
+                                                ⚠ <span x-text="scan.findings.suspicious_links.length"></span> LINK MENCURIGAKAN
                                             </strong>
                                             <template x-for="link in scan.findings.suspicious_links.slice(0, 3)">
                                                 <div class="text-dim" x-text="'  - ' + link.domain + ' (' + link.reason + ')'"></div>
@@ -118,7 +134,7 @@
 
                                 <div class="mt-2">
                                     <a :href="'/scans/' + scan.id" class="terminal-btn-secondary" style="text-decoration: none;">
-                                        &gt; VIEW DETAILS_
+                                        &gt; LIHAT DETAIL_
                                     </a>
                                 </div>
                             </div>
@@ -127,8 +143,8 @@
                         <!-- Failed scan -->
                         <template x-if="scan.status === 'failed'">
                             <div class="finding-item danger">
-                                <strong class="text-error">✗ SCAN FAILED</strong>
-                                <div class="text-dim" x-text="scan.error_message || 'Unknown error'"></div>
+                                <strong class="text-error">✗ SCAN GAGAL</strong>
+                                <div class="text-dim" x-text="scan.error_message || scan.currentStep || 'Error tidak diketahui'"></div>
                             </div>
                         </template>
                     </div>
@@ -160,6 +176,7 @@ function getStatusBadgeClass(status) {
 }
 
 function getRiskBadgeClass(risk) {
+    if (!risk || risk === 'unknown') return 'badge';
     return 'badge badge-risk-' + risk;
 }
 </script>

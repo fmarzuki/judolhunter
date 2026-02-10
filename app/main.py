@@ -76,11 +76,15 @@ async def forbidden_handler(request: Request, exc):
 @app.exception_handler(status.HTTP_429_TOO_MANY_REQUESTS)
 async def rate_limit_handler(request: Request, exc):
     """Handle rate limit errors."""
+    retry_after = None
+    if hasattr(exc, "headers") and exc.headers is not None:
+        retry_after = exc.headers.get("Retry-After")
+    
     return JSONResponse(
         status_code=status.HTTP_429_TOO_MANY_REQUESTS,
         content={
             "detail": str(exc.detail) if hasattr(exc, "detail") else "Rate limit exceeded",
-            "retry_after": exc.headers.get("Retry-After") if hasattr(exc, "headers") else None,
+            "retry_after": retry_after,
         },
     )
 

@@ -13,7 +13,7 @@
         <div class="terminal-title">judolhunter@terminal:~$ ./view_results.sh</div>
     </div>
 
-    <div class="terminal-body" x-data="scanDetail">
+    <div class="terminal-body" x-data="scanDetail" data-scan-id="{{ scan_id }}">
         <h1 class="mb-3">&gt; SCAN RESULTS</h1>
 
         <template x-if="loading">

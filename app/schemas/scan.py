@@ -53,10 +53,17 @@ class ScanResponse(BaseModel):
     status: ScanStatus
     risk_level: RiskLevel
     started_at: datetime
-    completed_at: datetime | None
-    duration_seconds: float | None
+    completed_at: datetime | None = None
+    duration_seconds: float | None = None
+    user_id: int | None = None
+    session_id: str | None = None
 
-    model_config = {"from_attributes": True}
+    model_config = {
+        "from_attributes": True,
+        "json_encoders": {
+            datetime: lambda v: v.isoformat() if v else None
+        }
+    }
 
 
 class ScanDetailResponse(ScanResponse):

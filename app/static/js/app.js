@@ -21,13 +21,21 @@ document.addEventListener('alpine:init', () => {
                         }
                     });
                     if (response.ok) {
-                        this.user = await response.json();
+                        const data = await response.json();
+                        this.user = data;
                         this.isAuthenticated = true;
                     } else {
+                        // Token invalid or expired, remove it
                         localStorage.removeItem('access_token');
+                        this.isAuthenticated = false;
+                        this.user = null;
                     }
                 } catch (error) {
                     console.error('Auth check failed:', error);
+                    // Remove invalid token
+                    localStorage.removeItem('access_token');
+                    this.isAuthenticated = false;
+                    this.user = null;
                 }
             }
         },
@@ -47,10 +55,11 @@ document.addEventListener('alpine:init', () => {
         scans: [],
         activeScan: null,
         showResults: false,
+        eventSources: {},
 
         async submitScan() {
             if (!this.urls.trim()) {
-                this.showError('Please enter at least one URL');
+                this.showError('Masukkan minimal satu URL');
                 return;
             }
 
@@ -71,19 +80,50 @@ document.addEventListener('alpine:init', () => {
                 });
 
                 if (!response.ok) {
-                    const error = await response.json();
-                    throw new Error(error.detail || 'Scan creation failed');
+                    const contentType = response.headers.get('content-type');
+                    let errorMessage = 'Gagal membuat scan';
+                    
+                    try {
+                        if (contentType && contentType.includes('application/json')) {
+                            const error = await response.json();
+                            errorMessage = error.detail || errorMessage;
+                            
+                            // Handle quota errors specifically
+                            if (response.status === 429) {
+                                errorMessage = '⚠️ Quota Limit Tercapai\n\n' + errorMessage + '\n\n💡 Tips: Gunakan domain yang berbeda atau tunggu hingga minggu depan untuk reset quota.';
+                            }
+                        } else {
+                            const text = await response.text();
+                            console.error('Non-JSON response:', text);
+                            errorMessage = `Error ${response.status}: ${response.statusText}`;
+                        }
+                    } catch (parseError) {
+                        console.error('Error parsing response:', parseError);
+                        errorMessage = `Error ${response.status}: Gagal memproses response dari server`;
+                    }
+                    
+                    throw new Error(errorMessage);
                 }
 
                 this.scans = await response.json();
+                
+                // Add progress tracking to each scan
+                this.scans = this.scans.map(scan => ({
+                    ...scan,
+                    progress: [],
+                    currentStep: null,
+                    isScanning: true
+                }));
+                
                 this.showResults = true;
                 this.activeScan = this.scans[0];
 
-                // Start streaming first scan
-                if (this.activeScan) {
-                    this.streamScan(this.activeScan.id);
+                // Start streaming all scans
+                for (const scan of this.scans) {
+                    this.streamScan(scan.id);
                 }
             } catch (error) {
+                console.error('Scan error:', error);
                 this.showError(error.message);
             } finally {
                 this.isSubmitting = false;
@@ -92,42 +132,98 @@ document.addEventListener('alpine:init', () => {
 
         async streamScan(scanId) {
             const token = localStorage.getItem('access_token');
-            const headers = {};
-            if (token) headers['Authorization'] = `Bearer ${token}`;
+            
+            // EventSource doesn't support custom headers
+            // Pass token as query parameter instead
+            let url = `/api/scans/${scanId}/stream`;
+            if (token) {
+                url += `?token=${encodeURIComponent(token)}`;
+            }
+            
+            const eventSource = new EventSource(url);
 
-            const eventSource = new EventSource(
-                `/api/scans/${scanId}/stream`,
-                { headers }
-            );
+            this.eventSources[scanId] = eventSource;
 
             eventSource.onmessage = (event) => {
                 const data = JSON.parse(event.data);
+                console.log('SSE event received:', data);
                 this.handleStreamEvent(data);
             };
 
-            eventSource.onerror = () => {
+            eventSource.onerror = (error) => {
+                console.error('EventSource error:', error);
                 eventSource.close();
+                delete this.eventSources[scanId];
             };
         },
 
         handleStreamEvent(event) {
             const scan = this.scans.find(s => s.id === event.scan_id);
-            if (scan) {
-                scan.status = event.data?.status || scan.status;
-                scan.risk_level = event.data?.risk_level || scan.risk_level;
+            if (!scan) return;
 
-                if (event.type === 'complete') {
-                    scan.findings = event.data?.findings;
-                }
+            // Update status and risk level
+            scan.status = event.data?.status || scan.status;
+            scan.risk_level = event.data?.risk_level || scan.risk_level;
 
-                // Force reactivity
-                this.scans = [...this.scans];
+            // Handle progress messages
+            if (event.type === 'progress') {
+                scan.currentStep = event.message;
+                if (!scan.progress) scan.progress = [];
+                scan.progress.push({
+                    message: event.message,
+                    timestamp: event.timestamp
+                });
             }
+
+            // Handle completion
+            if (event.type === 'complete' || event.type === 'error') {
+                scan.findings = event.data?.findings;
+                scan.isScanning = false;
+                scan.currentStep = event.message;
+                
+                // Close event source
+                if (this.eventSources[scan.id]) {
+                    this.eventSources[scan.id].close();
+                    delete this.eventSources[scan.id];
+                }
+            }
+
+            // Force reactivity
+            this.scans = [...this.scans];
         },
 
         showError(message) {
-            // Simple alert for now, could be enhanced
-            alert(message);
+            // Create a better error display
+            const errorDiv = document.createElement('div');
+            errorDiv.className = 'flash-message flash-error';
+            errorDiv.style.position = 'fixed';
+            errorDiv.style.top = '20px';
+            errorDiv.style.right = '20px';
+            errorDiv.style.maxWidth = '400px';
+            errorDiv.style.zIndex = '9999';
+            errorDiv.style.animation = 'fadeInSlide 0.3s ease-out';
+            errorDiv.innerHTML = `
+                <strong>❌ Error</strong>
+                <div style="margin-top: 0.5rem; white-space: pre-wrap;">${message}</div>
+                <button onclick="this.parentElement.remove()" style="margin-top: 0.5rem;" class="terminal-btn-secondary">
+                    Tutup
+                </button>
+            `;
+            document.body.appendChild(errorDiv);
+            
+            // Auto remove after 10 seconds
+            setTimeout(() => {
+                if (errorDiv.parentElement) {
+                    errorDiv.remove();
+                }
+            }, 10000);
+        },
+
+        // Clean up event sources when component is destroyed
+        destroy() {
+            for (const scanId in this.eventSources) {
+                this.eventSources[scanId].close();
+            }
         }
     }));
 

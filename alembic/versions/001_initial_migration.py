@@ -70,7 +70,7 @@ def upgrade() -> None:
         sa.Column('findings', sa.JSON(), nullable=True),
         sa.Column('fetch_info', sa.JSON(), nullable=True),
         sa.Column('error_message', sa.Text(), nullable=True),
-        sa.Column('started_at', sa.DateTime(), nullable=False),
+        sa.Column('started_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.Column('completed_at', sa.DateTime(), nullable=True),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id')
@@ -90,8 +90,8 @@ def upgrade() -> None:
         sa.Column('domain', sa.String(length=255), nullable=False),
         sa.Column('week_start', sa.Date(), nullable=False),
         sa.Column('scan_count', sa.Integer(), nullable=False),
-        sa.Column('created_at', sa.DateTime(), nullable=False),
-        sa.Column('updated_at', sa.DateTime(), nullable=False),
+        sa.Column('created_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
+        sa.Column('updated_at', sa.DateTime(), nullable=False, server_default=sa.func.now()),
         sa.ForeignKeyConstraint(['user_id'], ['users.id'], ondelete='CASCADE'),
         sa.PrimaryKeyConstraint('id')
     )

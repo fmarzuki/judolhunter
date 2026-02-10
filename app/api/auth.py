@@ -105,14 +105,12 @@ async def login(
 
 @router.get("/me", response_model=UserResponse)
 async def get_me(
-    user: CurrentUser,
+    user: AuthUser,
 ):
-    """Get current authenticated user profile."""
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Not authenticated",
-        )
+    """Get current authenticated user profile.
+    
+    Requires authentication. Returns 401 if not logged in.
+    """
     return user
 
 
