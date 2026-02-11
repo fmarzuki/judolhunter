@@ -5,4 +5,6 @@ hasil.json
 hasil.txt
 url.txt
 *.db
+.idea/
+.beads/
 .claude/
