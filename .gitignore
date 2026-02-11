@@ -4,4 +4,5 @@ __pycache__/
 hasil.json
 hasil.txt
 url.txt
+*.db
 .claude/
